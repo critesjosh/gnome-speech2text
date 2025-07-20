@@ -24,15 +24,9 @@ print_status() {
     echo -e "${GREEN}==>${NC} $1"
 }
 
-# Function to download a file
-download_file() {
-    local url=$1
-    local output=$2
-    print_status "Downloading $output..."
-    if ! wget -q "$url" -O "$output"; then
-        error_exit "Failed to download $output"
-    fi
-}
+# Get the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PACKAGE_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Function to check if a command exists
 command_exists() {
@@ -42,7 +36,7 @@ command_exists() {
 echo ""
 echo -e "${GREEN}🎤 GNOME Speech2Text Extension Installer${NC}"
 echo -e "${GREEN}========================================${NC}"
-echo -e "${YELLOW}⚡ Starting installation...${NC}"
+echo -e "${YELLOW}⚡ Starting installation from local package...${NC}"
 echo ""
 
 # Check if running as root
@@ -70,45 +64,37 @@ if [ -d "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page" ]; then
     rm -rf "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page" || error_exit "Failed to remove existing extension"
 fi
 
-# Create temporary directory for downloads
-print_status "Preparing download workspace..."
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR" || error_exit "Failed to create temporary directory"
-
-# Download all necessary files
-REPO_URL="https://raw.githubusercontent.com/kavehtehrani/gnome-speech2text/main"
-download_file "$REPO_URL/scripts/setup_env.sh" "setup_env.sh"
-download_file "$REPO_URL/requirements.txt" "requirements.txt"
-download_file "$REPO_URL/dist/gnome-speech2text@kaveh.page.zip" "gnome-speech2text@kaveh.page.zip"
-
-# Extract the extension to temporary location first
-print_status "Extracting extension..."
-EXTRACT_DIR="$TEMP_DIR/extracted"
-mkdir -p "$EXTRACT_DIR" || error_exit "Failed to create extraction directory"
-
-if ! unzip -q gnome-speech2text@kaveh.page.zip -d "$EXTRACT_DIR"; then
-    error_exit "Failed to extract extension"
+# Verify we have all necessary files locally
+print_status "Verifying package files..."
+if [ ! -f "$PACKAGE_ROOT/extension.js" ]; then
+    error_exit "extension.js not found in package"
+fi
+if [ ! -f "$PACKAGE_ROOT/metadata.json" ]; then
+    error_exit "metadata.json not found in package"
+fi
+if [ ! -f "$SCRIPT_DIR/setup_env.sh" ]; then
+    error_exit "setup_env.sh not found in package"
+fi
+if [ ! -f "$PACKAGE_ROOT/requirements.txt" ]; then
+    error_exit "requirements.txt not found in package"
 fi
 
-# Create extension directory and move files
+# Create extension directory and copy files
+print_status "Installing extension files..."
 mkdir -p "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page" || error_exit "Failed to create extension directory"
 
-# Move all extracted files to the proper extension directory
-if ! mv "$EXTRACT_DIR"/* "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/"; then
-    error_exit "Failed to move extension files"
+# Copy all extension files from the package
+if ! cp -r "$PACKAGE_ROOT"/* "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/"; then
+    error_exit "Failed to copy extension files"
 fi
 
-# Verify the extension was extracted correctly
+# Verify the extension was copied correctly
 if [ ! -f "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/metadata.json" ]; then
-    error_exit "Extension was not extracted correctly"
+    error_exit "Extension was not copied correctly"
 fi
-
-# Copy setup files to extension directory
-cp setup_env.sh "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/" || error_exit "Failed to copy setup script"
-cp requirements.txt "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/" || error_exit "Failed to copy requirements file"
 
 # Make setup script executable
-chmod +x "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/setup_env.sh" || error_exit "Failed to make setup script executable"
+chmod +x "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page/scripts/setup_env.sh" || error_exit "Failed to make setup script executable"
 
 # Run the setup script with progress information
 echo ""
@@ -119,13 +105,12 @@ echo -e "${YELLOW}🔄 Please be patient - this is a one-time setup${NC}"
 echo ""
 
 cd "$EXTENSIONS_DIR/gnome-speech2text@kaveh.page" || error_exit "Failed to change to extension directory"
-if ! bash setup_env.sh --progress; then
+if ! bash scripts/setup_env.sh --progress; then
     error_exit "Setup script failed"
 fi
 
-# Clean up
+# Return to previous directory
 cd - > /dev/null || true
-rm -rf "$TEMP_DIR"
 
 echo -e "${GREEN}Installation complete!${NC}"
 echo -e "${YELLOW}Please restart GNOME Shell:${NC}"
