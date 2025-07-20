@@ -7,6 +7,23 @@ export interface ExtensionMetadata {
   url?: string;
   'settings-schema'?: string;
   'gettext-domain'?: string;
+  path: string;
+}
+
+export abstract class Extension {
+  metadata: ExtensionMetadata;
+  
+  constructor(metadata: ExtensionMetadata) {
+    this.metadata = metadata;
+  }
+  
+  abstract enable(): void;
+  abstract disable(): void;
+  
+  getSettings(): any {
+    // Implementation would be provided by GNOME Shell
+    return null;
+  }
 }
 
 export interface RecordingState {

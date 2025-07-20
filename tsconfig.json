@@ -19,6 +19,7 @@
     "noImplicitAny": false,
     "declaration": false,
     "sourceMap": false,
+    "noPropertyAccessFromIndexSignature": false,
     "paths": {
       "gi://*": ["./src/types/gi/*"]
     },

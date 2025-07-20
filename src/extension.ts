@@ -5,11 +5,12 @@ import Meta from "gi://Meta";
 import Shell from "gi://Shell";
 import St from "gi://St";
 
+// @ts-ignore - GNOME Shell resources
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+// @ts-ignore - GNOME Shell resources
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
+// @ts-ignore - GNOME Shell resources
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
-import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
-
 // Import modularized utilities
 import { COLORS, STYLES } from "./lib/constants.js";
 import { debugFocusState, establishX11FocusContext } from "./lib/focusUtils.js";
@@ -29,7 +30,10 @@ import {
 } from "./lib/resourceUtils.js";
 import { RecordingDialog } from "./lib/recordingDialog.js";
 import { checkSetupStatus } from "./lib/setupUtils.js";
-import { ExtensionMetadata } from "./types/extension.js";
+import { ExtensionMetadata, Extension } from "./types/extension.js";
+
+// Global declarations
+declare function log(message: string): void;
 
 let button: PanelMenu.Button | null;
 
@@ -44,6 +48,11 @@ export default class WhisperTypingExtension extends Extension {
   public recordingIcon: St.Label;
   public icon: St.Icon;
   public button: PanelMenu.Button | null;
+  public shortcutLabel: any;
+  public currentShortcutDisplay: St.Label;
+  public currentDurationDisplay: St.Label;
+  public clipboardCheckbox: St.Button;
+  public clipboardCheckboxIcon: St.Label;
   
   constructor(metadata: ExtensionMetadata) {
     super(metadata);
@@ -67,7 +76,7 @@ export default class WhisperTypingExtension extends Extension {
 
   _runSetupInTerminal() {
     // Launch a terminal window to run the setup script so user can see progress
-    const setupScript = `${this.path}/scripts/setup_env.sh`;
+    const setupScript = `${this.metadata.path}/scripts/setup_env.sh`;
 
     // Try different terminal emulators in order of preference
     const terminals = [
@@ -123,7 +132,7 @@ echo "Please read the prompts below and follow the instructions."
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
-cd "${this.path}"
+cd "${this.metadata.path}"
 bash "${setupScript}" --interactive
 exit_code=$?
 
@@ -154,14 +163,10 @@ read
       // Write wrapper script to temp file
       const tempScript = `${GLib.get_tmp_dir()}/speech2text-setup.sh`;
       const file = Gio.File.new_for_path(tempScript);
-      const outputStream = file.replace(
-        null,
-        false,
-        Gio.FileCreateFlags.NONE,
-        null
-      );
-      outputStream.write(wrapperScript, null);
-      outputStream.close(null);
+      // @ts-ignore - GLib API
+      const bytes = new GLib.Bytes(wrapperScript);
+      // @ts-ignore - Gio API
+      file.replace_contents(bytes, null, false, Gio.FileCreateFlags.NONE, null);
 
       // Make script executable
       GLib.spawn_command_line_sync(`chmod +x "${tempScript}"`);
@@ -216,7 +221,8 @@ read
         terminalArgs,
         null, // envp
         GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
-        null // child_setup
+        null, // child_setup
+        null  // user_data
       );
 
       if (success) {
@@ -244,7 +250,7 @@ read
                 log(`Focused setup terminal window: ${windowId}`);
               }
             }
-          } catch {
+          } catch (e) {
             log(`Could not focus terminal window: ${e}`);
           }
           return false; // Don't repeat
@@ -264,7 +270,7 @@ read
       } else {
         throw new Error("Failed to launch terminal");
       }
-    } catch {
+    } catch (e: any) {
       log(`Error launching terminal setup: ${e}`);
       Main.notify(
         "Speech2Text Error",
@@ -275,7 +281,7 @@ read
   }
 
   enable() {
-    const setup = checkSetupStatus(this.path);
+    const setup = checkSetupStatus(this.metadata.path);
     if (setup.needsSetup) {
       this._showSetupDialog(setup.message);
       if (this._runSetupInTerminal()) {
@@ -301,7 +307,7 @@ read
 
     this.icon = new St.Icon({
       gicon: Gio.icon_new_for_string(
-        `${this.path}/icons/microphone-symbolic.svg`
+        `${this.metadata.path}/icons/microphone-symbolic.svg`
       ),
       style_class: "system-status-icon",
     });
@@ -1018,6 +1024,7 @@ read
       closeSettings();
 
       // Then open the GitHub link
+      // @ts-ignore - GNOME Shell API
       Gio.app_info_launch_default_for_uri(
         "https://github.com/kavehtehrani/gnome-speech2text/",
         global.create_app_launch_context(0, -1)
@@ -1064,6 +1071,7 @@ read
     // Center the settings window dynamically
     // Use a small delay to ensure the window has been sized properly
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10, () => {
+      // @ts-ignore - GNOME Shell API
       let [windowWidth, windowHeight] = settingsWindow.get_size();
 
       // Fallback to estimated size if get_size() returns 0
@@ -1104,6 +1112,7 @@ read
 
     // Escape key to close and block all other keyboard events from going to background
     keyPressHandlerId = overlay.connect("key-press-event", (actor, event) => {
+      // @ts-ignore - Clutter key constants
       if (event.get_key_symbol() === Clutter.KEY_Escape) {
         closeSettings();
         return Clutter.EVENT_STOP;
@@ -1189,7 +1198,7 @@ read
 
         // Show confirmation
         Main.notify("Speech2Text", "Keyboard shortcut removed");
-      } catch {
+      } catch (e) {
         log(`Error removing keybinding: ${e}`);
         Main.notify("Speech2Text", "Error removing keyboard shortcut");
       }
@@ -1398,6 +1407,7 @@ read
       const state = event.get_state();
 
       // Handle Escape to cancel
+      // @ts-ignore - Clutter key constants
       if (keyval === Clutter.KEY_Escape) {
         safeDisconnect(overlay, captureId, "keyboard capture handler");
         restoreHandlers();
@@ -1407,11 +1417,16 @@ read
 
       // Show current key combination being pressed (real-time feedback)
       let currentCombo = "";
+      // @ts-ignore - Clutter modifier constants
       if (state & Clutter.ModifierType.CONTROL_MASK) currentCombo += "Ctrl+";
+      // @ts-ignore - Clutter modifier constants
       if (state & Clutter.ModifierType.SHIFT_MASK) currentCombo += "Shift+";
+      // @ts-ignore - Clutter modifier constants
       if (state & Clutter.ModifierType.MOD1_MASK) currentCombo += "Alt+";
+      // @ts-ignore - Clutter modifier constants
       if (state & Clutter.ModifierType.SUPER_MASK) currentCombo += "Super+";
 
+      // @ts-ignore - Clutter API
       const keyname = Clutter.keyval_name(keyval);
       if (
         keyname &&
@@ -1434,9 +1449,13 @@ read
 
         // Build shortcut string for saving
         let shortcut = "";
+        // @ts-ignore - Clutter modifier constants
         if (state & Clutter.ModifierType.CONTROL_MASK) shortcut += "<Control>";
+        // @ts-ignore - Clutter modifier constants
         if (state & Clutter.ModifierType.SHIFT_MASK) shortcut += "<Shift>";
+        // @ts-ignore - Clutter modifier constants
         if (state & Clutter.ModifierType.MOD1_MASK) shortcut += "<Alt>";
+        // @ts-ignore - Clutter modifier constants
         if (state & Clutter.ModifierType.SUPER_MASK) shortcut += "<Super>";
 
         // Always add the key name (even if no modifiers)
@@ -1475,6 +1494,7 @@ read
         "toggle-recording",
         this.settings,
         Meta.KeyBindingFlags.NONE,
+        // @ts-ignore - Shell API
         Shell.ActionMode.NORMAL,
         () => {
           log(`🎹 KEYBOARD SHORTCUT TRIGGERED`);
@@ -1486,7 +1506,7 @@ read
         }
       );
       log(`Keybinding registered: ${this.currentKeybinding}`);
-    } catch {
+    } catch (e) {
       log(`Error registering keybinding: ${e}`);
     }
   }
@@ -1532,7 +1552,7 @@ read
         log("⚠️ Failed to send SIGUSR1, trying SIGTERM");
         GLib.spawn_command_line_sync(`kill -TERM ${this.recordingProcess}`);
       }
-    } catch {
+    } catch (e) {
       log(`❌ Error sending signal: ${e}`);
     }
     // Don't cleanup yet - let the process finish and show preview
@@ -1555,8 +1575,8 @@ read
 
       // Build command arguments
       const args = [
-        `${this.path}/venv/bin/python3`,
-        `${this.path}/whisper_typing.py`,
+        `${this.metadata.path}/venv/bin/python3`,
+        `${this.metadata.path}/whisper_typing.py`,
         `--duration`,
         `${recordingDuration}`,
         `--preview-mode`, // Always use preview mode
@@ -1580,7 +1600,8 @@ read
         }
       }
 
-      const [success, pid, _stdin, stdout, _stderr] = GLib.spawn_async_with_pipes(
+      // @ts-ignore - GLib API
+      const [success, pid, , stdout] = GLib.spawn_async_with_pipes(
         null,
         args,
         null,
@@ -1615,7 +1636,7 @@ read
             this.icon?.set_style("");
           },
           (textToInsert) => {
-            log("🎯 Insert callback triggered with text:", textToInsert);
+            log(`🎯 Insert callback triggered with text: ${textToInsert}`);
             // Insert callback - type the text and cleanup
             this._typeText(textToInsert);
             this.recordingDialog = null;
@@ -1639,7 +1660,9 @@ read
         }
 
         // Set up stdout reading to monitor process and capture transcribed text
+        // @ts-ignore - Gio API
         const stdoutStream = new Gio.DataInputStream({
+          // @ts-ignore - Gio API
           base_stream: new Gio.UnixInputStream({ fd: stdout }),
         });
 
@@ -1727,7 +1750,7 @@ read
 
                   readOutput();
                 }
-              } catch {
+              } catch (e) {
                 log(`Error reading stdout: ${e}`);
               }
             }
@@ -1773,7 +1796,7 @@ read
           // If successful and preview is showing, everything is working correctly
         });
       }
-    } catch {
+    } catch (e) {
       log(`Error starting recording: ${e}`);
       cleanupRecordingState(this);
     }
@@ -1787,7 +1810,7 @@ read
     try {
       Main.wm.removeKeybinding("toggle-recording");
       log("Keybinding removed");
-    } catch {
+    } catch (e) {
       log(`Error removing keybinding: ${e}`);
     }
 
@@ -1804,7 +1827,7 @@ read
     log(`=== TOGGLE RECORDING DEBUG START ===`);
 
     // Check if Python environment is set up before proceeding
-    const setup = checkSetupStatus(this.path);
+    const setup = checkSetupStatus(this.metadata.path);
     if (setup.needsSetup) {
       log(`Python environment not found - launching setup`);
       Main.notify("Speech2Text", "Python environment missing. Setting up...");
@@ -1877,8 +1900,8 @@ read
 
       // Build command arguments for typing
       const args = [
-        `${this.path}/venv/bin/python3`,
-        `${this.path}/whisper_typing.py`,
+        `${this.metadata.path}/venv/bin/python3`,
+        `${this.metadata.path}/whisper_typing.py`,
         `--type-only`,
         text.trim(),
       ];
@@ -1907,6 +1930,7 @@ read
         args,
         null,
         GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+        null,
         null
       );
 
@@ -1929,7 +1953,7 @@ read
         const message = IS_WAYLAND ? "Failed to process text." : "Failed to insert text.";
         Main.notify("Speech2Text Error", message);
       }
-    } catch {
+    } catch (e) {
       log(`❌ Error typing text: ${e}`);
       const message = IS_WAYLAND ? "Failed to process text." : "Failed to insert text.";
       Main.notify("Speech2Text Error", message);

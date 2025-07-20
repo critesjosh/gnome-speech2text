@@ -4,6 +4,7 @@ declare module "gi://St" {
       new(properties?: any): Widget;
       add_child(child: Widget): void;
       remove_child(child: Widget): void;
+      remove_all_children(): void;
       connect(signal: string, callback: Function): number;
       disconnect(id: number): void;
       show(): void;
@@ -28,6 +29,7 @@ declare module "gi://St" {
       new(properties?: any): BoxLayout;
       pack_start(child: Widget, expand?: boolean, x_fill?: boolean, y_fill?: boolean): void;
       pack_end(child: Widget, expand?: boolean, x_fill?: boolean, y_fill?: boolean): void;
+      set_x_align(align: any): void;
     }
 
     interface Button extends Bin {
@@ -49,6 +51,7 @@ declare module "gi://St" {
       set_text(text: string): void;
       get_text(): string;
       grab_key_focus(): void;
+      get_clutter_text(): any;
     }
 
     interface ScrollView extends Bin {
@@ -64,6 +67,17 @@ declare module "gi://St" {
     interface ProgressBar extends Widget {
       new(properties?: any): ProgressBar;
       set_value(value: number): void;
+    }
+
+    // Clipboard support
+    interface Clipboard {
+      get_default(): Clipboard;
+      set_text(type: ClipboardType, text: string): void;
+    }
+
+    enum ClipboardType {
+      PRIMARY = 0,
+      CLIPBOARD = 1,
     }
 
     // Constructor functions
@@ -93,6 +107,9 @@ declare module "gi://St" {
     };
     const ProgressBar: {
       new(properties?: any): ProgressBar;
+    };
+    const Clipboard: {
+      get_default(): Clipboard;
     };
   }
 

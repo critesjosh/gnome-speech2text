@@ -1,5 +1,8 @@
 import GLib from "gi://GLib";
 
+// Global declarations
+declare function log(message: string): void;
+
 export interface FocusState {
   hasActiveWindow: boolean;
   windowId: string | null;
