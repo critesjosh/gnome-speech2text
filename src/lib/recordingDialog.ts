@@ -2,9 +2,13 @@ import Clutter from "gi://Clutter";
 import GLib from "gi://GLib";
 import St from "gi://St";
 import Meta from "gi://Meta";
+// @ts-ignore - GNOME Shell resources
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { COLORS, STYLES } from "./constants.js";
 import { createHoverButton } from "./uiUtils.js";
+
+// Global declarations
+declare function log(message: string): void;
 
 // Check Wayland status once at load
 const IS_WAYLAND = Meta.is_wayland_compositor();
@@ -23,6 +27,18 @@ export class RecordingDialog {
   public timerLabel: St.Label;
   public isPreviewMode: boolean;
   public transcribedText: string;
+  public container: St.Widget;
+  public recordingLabel: St.Label;
+  public recordingIcon: St.Label;
+  public instructionLabel: St.Label;
+  public stopButton: St.Button;
+  public cancelButton: St.Button;
+  public processingTimeout: number | null;
+  public timeDisplay: St.Label;
+  public progressBar: St.Widget;
+  public progressContainer: St.Widget;
+  public textEntry: St.Entry;
+  public previewCancelButton: St.Button;
   
   private onStop: () => void;
   private onCancel: () => void;
@@ -69,7 +85,9 @@ export class RecordingDialog {
         // Try to get key name safely
         let keyname = "unknown";
         try {
+          // @ts-ignore - Clutter API
           if (Clutter.get_key_name) {
+            // @ts-ignore - Clutter API
             keyname = Clutter.get_key_name(keyval) || `keycode-${keyval}`;
           }
         } catch {
@@ -78,6 +96,7 @@ export class RecordingDialog {
 
         log(`🎯 KEYBOARD EVENT RECEIVED: ${keyname} (${keyval})`);
 
+        // @ts-ignore - Clutter key constants
         if (keyval === Clutter.KEY_Escape) {
           // Escape = Cancel (no transcription)
           log(`🎯 Canceling recording via keyboard: ${keyname}`);
@@ -86,8 +105,11 @@ export class RecordingDialog {
           return Clutter.EVENT_STOP;
         } else if (
           !this.isPreviewMode &&
+          // @ts-ignore - Clutter key constants
           (keyval === Clutter.KEY_space ||
+            // @ts-ignore - Clutter key constants
             keyval === Clutter.KEY_Return ||
+            // @ts-ignore - Clutter key constants
             keyval === Clutter.KEY_KP_Enter)
         ) {
           // Enter/Space = Stop and process (with transcription) - only in recording mode
@@ -641,7 +663,7 @@ export class RecordingDialog {
     const progressWidth = Math.floor(280 * progress);
 
     // Determine color based on progress
-    let barColor = COLORS.PRIMARY;
+    let barColor: string = COLORS.PRIMARY;
     const textColor = "white";
 
     if (progress > 0.8) {

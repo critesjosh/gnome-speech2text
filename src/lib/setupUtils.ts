@@ -1,18 +1,23 @@
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 
+// Global declarations
+declare function log(message: string): void;
+
 export function runSetupScript(extensionPath: string): boolean {
   try {
     const setupScript = `${extensionPath}/scripts/setup_env.sh`;
     const file = Gio.File.new_for_path(setupScript);
 
     // Make sure the script is executable
+    // @ts-ignore - Gio API
     const info = file.query_info(
       "unix::mode",
       Gio.FileQueryInfoFlags.NONE,
       null
     );
     const mode = info.get_attribute_uint32("unix::mode");
+    // @ts-ignore - Gio API
     file.set_attribute_uint32(
       "unix::mode",
       mode | 0o111,
@@ -26,7 +31,8 @@ export function runSetupScript(extensionPath: string): boolean {
       ["bash", setupScript], // command and args
       null, // envp
       GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
-      null // child_setup
+      null, // child_setup
+      null  // user data
     );
 
     if (!success) {

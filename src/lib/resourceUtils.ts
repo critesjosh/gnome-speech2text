@@ -1,5 +1,9 @@
 import GLib from "gi://GLib";
+// @ts-ignore - GNOME Shell resources
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+
+// Global declarations
+declare function log(message: string): void;
 
 export interface EventHandlers {
   clickHandlerId?: number;
