@@ -19,7 +19,7 @@ mkdir -p "$DIST_DIR"
 
 # Create temporary directory
 TEMP_DIR=$(mktemp -d)
-EXTENSION_DIR="$TEMP_DIR/gnome-speech2text@klocal"
+EXTENSION_DIR="$TEMP_DIR/gnome-speech2text@kaveh.page"
 
 echo -e "${YELLOW}Creating extension directory...${NC}"
 # Create extension directory
